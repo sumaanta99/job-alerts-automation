@@ -43,4 +43,5 @@ jobs:
           EMAIL_RECIPIENT: sumaantamunde@gmail.com
           EMAIL_SENDER: sumaantamunde@gmail.com
           JOBS_DB_PATH: jobs_seen.db
+          MIN_JOB_SCORE: 1  # temporary: lower threshold to verify pipeline; raise back to 6 after testing
         run: python main.py
