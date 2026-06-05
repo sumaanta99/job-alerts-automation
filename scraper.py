@@ -378,7 +378,7 @@ def scrape_cutshort() -> list[dict[str, Any]]:
         except Exception as exc:
             logger.warning("Cutshort API %s failed: %s", api_url, exc)
 
-    search_url = "https://cutshort.io/job/product-manager-jobs-in-bangalore"
+    search_url = "https://cutshort.io/jobs/product-manager-jobs-in-bangalore-bengaluru"
     try:
         response = session.get(search_url, timeout=30)
         response.raise_for_status()
@@ -602,61 +602,61 @@ def scrape_linkedin(apify_api_key: str) -> list[dict[str, Any]]:
         logger.warning("APIFY_API_KEY not set; skipping LinkedIn")
         return []
 
-    # User-specified actor slug; fall back to the maintained API variant.
-    actor_ids = [
-        "apimaestro~linkedin-jobs-scraper",
-        "apimaestro~linkedin-jobs-scraper-api",
-    ]
+    # apimaestro~linkedin-jobs-scraper-api uses keywords + location_id (LinkedIn geoId).
+    # India geoId = 102713980. Results are wrapped: {"status": "success", "results": [...]}
+    actor_id = "apimaestro~linkedin-jobs-scraper-api"
     payload = {
         "keywords": "product manager",
-        "location": "India",
-        "date_posted": "past-24h",
-        "limit": 50,
+        "location_id": "102713980",  # India
     }
 
     last_error: Exception | None = None
-    for actor_id in actor_ids:
-        url = f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items"
-        try:
-            response = requests.post(
-                url,
-                params={"token": apify_api_key},
-                json=payload,
-                timeout=300,
-            )
-            if response.status_code == 404:
-                continue
-            response.raise_for_status()
-            items = response.json()
-            jobs: list[dict[str, Any]] = []
-            for item in items:
-                title = item.get("title") or item.get("job_title") or ""
-                company = item.get("company") or item.get("companyName") or ""
-                url = item.get("job_url") or item.get("link") or item.get("url") or ""
-                location = item.get("location") or item.get("job_location") or "India"
-                experience = item.get("experience_level") or item.get("experience") or "Not specified"
-                posted_raw = item.get("posted_at") or item.get("listed_at") or item.get("datePosted") or ""
-                posted_dt = _parse_relative_posted(str(posted_raw))
-                description = item.get("description") or item.get("job_description") or ""
-                if title and url:
-                    jobs.append(
-                        _normalize_job(
-                            title=title,
-                            company=company,
-                            url=url,
-                            location=location,
-                            experience=str(experience),
-                            posted_at=str(posted_raw or "Unknown"),
-                            description=description,
-                            source=source,
-                            posted_datetime=posted_dt,
-                        )
+    run_url = f"https://api.apify.com/v2/acts/{actor_id}/run-sync-get-dataset-items"
+    try:
+        response = requests.post(
+            run_url,
+            params={"token": apify_api_key},
+            json=payload,
+            timeout=300,
+        )
+        response.raise_for_status()
+        data = response.json()
+        # Actor returns either a list or {"status":..., "results": [...]}
+        if isinstance(data, list):
+            raw_items = data
+        elif isinstance(data, dict):
+            raw_items = data.get("results") or data.get("jobs") or []
+        else:
+            raw_items = []
+        jobs: list[dict[str, Any]] = []
+        for item in raw_items:
+            title = item.get("job_title") or item.get("title") or ""
+            company = item.get("company") or item.get("companyName") or ""
+            job_url = item.get("job_url") or item.get("link") or item.get("url") or ""
+            location = item.get("location") or item.get("job_location") or "India"
+            experience = item.get("experience_level") or item.get("experience") or "Not specified"
+            posted_raw = item.get("posted_at") or item.get("listed_at") or item.get("datePosted") or ""
+            posted_dt = _parse_relative_posted(str(posted_raw))
+            description = item.get("description") or item.get("job_description") or ""
+            if title and job_url:
+                jobs.append(
+                    _normalize_job(
+                        title=title,
+                        company=company,
+                        url=job_url,
+                        location=location,
+                        experience=str(experience),
+                        posted_at=str(posted_raw or "Unknown"),
+                        description=description,
+                        source=source,
+                        posted_datetime=posted_dt,
                     )
-            logger.info("LinkedIn (Apify/%s) returned %d jobs", actor_id, len(jobs))
-            return _dedupe_by_url(jobs)
-        except Exception as exc:
-            last_error = exc
-            logger.warning("LinkedIn Apify actor %s failed: %s", actor_id, exc)
+                )
+        logger.info("LinkedIn (Apify/%s) returned %d jobs", actor_id, len(jobs))
+        return _dedupe_by_url(jobs)
+    except Exception as exc:
+        last_error = exc
+        logger.warning("LinkedIn Apify actor %s failed: %s", actor_id, exc)
 
     if last_error:
         raise last_error
