@@ -1,0 +1,46 @@
+name: PM Job Alert Digest
+
+on:
+  schedule:
+    # 9:00 AM IST = 03:30 UTC
+    - cron: "30 3 * * *"
+    # 5:00 PM IST = 11:30 UTC
+    - cron: "30 11 * * *"
+  workflow_dispatch:
+
+jobs:
+  send-digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Restore jobs_seen.db cache
+        uses: actions/cache@v4
+        with:
+          path: jobs_seen.db
+          key: jobs-seen-db-${{ github.repository }}
+          restore-keys: |
+            jobs-seen-db-
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run job alert bot
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          APIFY_API_KEY: ${{ secrets.APIFY_API_KEY }}
+          EMAIL_RECIPIENT: sumaantamunde@gmail.com
+          EMAIL_SENDER: sumaantamunde@gmail.com
+          JOBS_DB_PATH: jobs_seen.db
+        run: python main.py
