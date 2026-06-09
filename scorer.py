@@ -36,7 +36,7 @@ Return JSON only:
 }
 """.strip()
 
-MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-20241022")
+MODEL = os.getenv("ANTHROPIC_MODEL", "claude-3-5-haiku-latest")
 MIN_SCORE = int(os.getenv("MIN_JOB_SCORE", "6"))
 
 
