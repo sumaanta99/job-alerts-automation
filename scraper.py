@@ -607,9 +607,7 @@ def scrape_linkedin(apify_api_key: str) -> list[dict[str, Any]]:
     actor_id = "apimaestro~linkedin-jobs-scraper-api"
     payload = {
         "keywords": "product manager",
-        "location": "India",
-        "date_posted": "r86400",  # past 24 hours
-        "limit": 100,
+        "location_id": "102713980",  # India geoId
     }
 
     last_error: Exception | None = None

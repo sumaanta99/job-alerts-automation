@@ -137,7 +137,7 @@ def _fetch_tweets(apify_key: str, query: str, max_items: int) -> list[dict[str, 
     """Fetch tweets for one search query. Returns normalised list."""
     yesterday = (datetime.now(IST) - timedelta(days=1)).strftime("%Y-%m-%d")
     try:
-        items = _apify_run(apify_key, "maximedupre/twitter-scraper", {
+        items = _apify_run(apify_key, "maximedupre~twitter-scraper", {
             "includePhrase": query,
             "shouldIncludeReposts": False,
             "shouldIncludeReplies": True,
