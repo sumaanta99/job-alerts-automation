@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 MODEL = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5")
-MIN_FOLLOWERS = 300
+MIN_VIEWS = 500      # proxy for account quality; maximedupre/twitter-scraper doesn't return follower counts
 MIN_TWEET_SCORE = 3
 
 # Queries that are already scoped to Bangalore — no post-filter needed
@@ -72,67 +72,40 @@ def _apify_run(apify_key: str, actor_id: str, payload: dict[str, Any]) -> list[d
 
 
 def _normalize_tweet(item: dict[str, Any]) -> dict[str, Any] | None:
-    """Normalise a raw Apify tweet item. Returns None if it should be skipped."""
-    # Tweet text — different actors use different field names
-    text = (
-        item.get("text")
-        or item.get("full_text")
-        or item.get("tweetText")
-        or item.get("content")
-        or ""
-    ).strip()
+    """Normalise a raw maximedupre/twitter-scraper item. Returns None if skipped."""
+    # maximedupre/twitter-scraper output fields
+    text = (item.get("postText") or "").strip()
     if not text:
         return None
 
-    # Skip retweets
-    if item.get("isRetweet") or item.get("retweetedStatus") or text.startswith("RT "):
+    # shouldIncludeReposts=False in the query, but guard anyway
+    if item.get("nbReposts") is None and text.startswith("RT "):
         return None
 
-    # Author fields — nested under "author" or "user" depending on actor version
-    author: dict[str, Any] = item.get("author") or item.get("user") or {}
-    handle = (
-        author.get("userName")
-        or author.get("screen_name")
-        or item.get("authorHandle")
-        or ""
-    ).lstrip("@")
-    name = (
-        author.get("name")
-        or author.get("displayName")
-        or item.get("authorName")
-        or handle
-    )
-    followers = int(
-        author.get("followers")
-        or author.get("followers_count")
-        or item.get("authorFollowersCount")
-        or 0
-    )
-
-    if followers < MIN_FOLLOWERS:
-        return None
-
-    # Tweet URL
-    tweet_url = item.get("url") or item.get("tweetUrl") or ""
+    handle = (item.get("authorHandle") or "").lstrip("@")
+    name = item.get("authorDisplayName") or handle
+    tweet_url = item.get("postUrl") or ""
     if not tweet_url:
-        tweet_id = item.get("id") or item.get("tweetId") or ""
-        if tweet_id and handle:
-            tweet_url = f"https://twitter.com/{handle}/status/{tweet_id}"
+        post_id = item.get("postId") or ""
+        if post_id and handle:
+            tweet_url = f"https://x.com/{handle}/status/{post_id}"
 
-    created_at = (
-        item.get("createdAt")
-        or item.get("created_at")
-        or item.get("timestamp")
-        or "Unknown"
-    )
+    created_at = item.get("postDateTime") or "Unknown"
+
+    # Use view count as a rough quality signal in place of follower count
+    # (maximedupre/twitter-scraper does not return follower counts)
+    nb_views = int(item.get("nbViews") or 0)
+    if nb_views < MIN_VIEWS:
+        return None
 
     return {
         "text": text,
         "handle": handle,
         "name": name,
-        "followers": followers,
+        "followers": nb_views,   # stored as proxy; labelled "views" in email
         "url": tweet_url,
         "created_at": str(created_at),
+        "nb_views": nb_views,
     }
 
 
@@ -162,11 +135,15 @@ def _score_tweet(text: str, client: anthropic.Anthropic) -> tuple[int, str]:
 
 def _fetch_tweets(apify_key: str, query: str, max_items: int) -> list[dict[str, Any]]:
     """Fetch tweets for one search query. Returns normalised list."""
+    yesterday = (datetime.now(IST) - timedelta(days=1)).strftime("%Y-%m-%d")
     try:
-        items = _apify_run(apify_key, "apify/twitter-scraper", {
-            "searchTerms": [query],
-            "maxItems": max_items,
-            "sort": "Latest",
+        items = _apify_run(apify_key, "maximedupre/twitter-scraper", {
+            "includePhrase": query,
+            "shouldIncludeReposts": False,
+            "shouldIncludeReplies": True,
+            "searchMode": "latest",
+            "startDate": yesterday,
+            "maxNbItemsToScrape": max_items,
         })
         normalised = []
         for item in items:

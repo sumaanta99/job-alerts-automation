@@ -102,18 +102,19 @@ def _build_twitter_section_html(signals: list[dict[str, Any]]) -> str:
     items = ""
     for s in signals:
         handle = escape(s.get("author_handle") or "")
-        followers = s.get("follower_count", 0)
+        nb_views = s.get("follower_count", 0)
         text = escape((s.get("tweet_text") or "")[:150])
         score = s.get("tweet_score", 0)
         created_at = escape(s.get("created_at") or "")
         url = escape(s.get("url") or "#")
         if len(s.get("tweet_text") or "") > 150:
             text += "…"
-        followers_fmt = f"{followers:,}"
+        views_fmt = f"{nb_views:,} views" if nb_views else ""
+        meta = f" ({views_fmt})" if views_fmt else ""
         items += f"""
         <li style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #e5e7eb;font-size:13px;color:#374151;">
           <span style="font-weight:600;color:#111;">@{handle}</span>
-          <span style="color:#9ca3af;"> ({followers_fmt} followers)</span>
+          <span style="color:#9ca3af;">{meta}</span>
           — {text}<br>
           <span style="color:#6b7280;font-size:12px;">
             Score: {score}/5 · {created_at} ·
