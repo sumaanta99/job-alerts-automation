@@ -681,7 +681,8 @@ def scrape_all(apify_api_key: str = "") -> list[dict[str, Any]]:
     scrapers = [
         ("naukri", scrape_naukri),
         ("instahyre", scrape_instahyre),
-        ("cutshort", scrape_cutshort),
+        # Cutshort disabled by user preference
+        # ("cutshort", scrape_cutshort),
         ("wellfound", scrape_wellfound),
         ("linkedin", lambda: scrape_linkedin(apify_api_key)),
     ]

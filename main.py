@@ -9,6 +9,8 @@ import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import linkedin_pm_enrichment
+import twitter_scraper
 from emailer import send_email
 from filter import apply_hard_filters
 from scorer import score_jobs
@@ -78,6 +80,10 @@ def run() -> int:
     apify_key = os.getenv("APIFY_API_KEY", "")
     conn = init_db()
 
+    # ── Line 1: collect Twitter hiring signals (kept separate from job pipeline) ──
+    twitter_signals = twitter_scraper.scrape(apify_key)
+    logger.info("Twitter scraper: %d signals collected", len(twitter_signals))
+
     raw_jobs = scrape_all(apify_api_key=apify_key)
     logger.info("Scraped %d total jobs across sources", len(raw_jobs))
 
@@ -90,11 +96,14 @@ def run() -> int:
     scored_jobs = score_jobs(new_jobs)
     logger.info("%d jobs scored >= threshold", len(scored_jobs))
 
+    # ── Line 2: enrich jobs scoring >= 8 with active PM contacts (modifies in-place) ──
+    linkedin_pm_enrichment.enrich(scored_jobs, apify_key=apify_key)
+
     # Mark all newly discovered jobs as seen so they are never re-scored or re-sent.
     mark_jobs_seen(new_jobs, conn)
 
     try:
-        send_email(scored_jobs)
+        send_email(scored_jobs, twitter_signals=twitter_signals)
     except Exception as exc:
         logger.error("Email delivery failed: %s", exc)
         return 1
